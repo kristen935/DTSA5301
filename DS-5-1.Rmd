@@ -1,0 +1,273 @@
+---
+title: "Week 5 Assignment"
+author: "Kristen Huang"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.height=8)
+```
+
+## Libraries
+```{r}
+library(mlbench)
+library(caret)
+library(e1071)
+library(lime)
+library(rpart.plot)
+library(rpart)
+library(pROC)
+library(readxl)  
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tidyquant)
+library(tidyverse)
+library(fpp2)
+library(bvarsv)
+library(prophet)
+library(data.table)
+library(ggplot2)
+library(lubridate)
+library(tidymodels) 
+```
+
+## Loading data
+```{r}
+csv1=read.csv("C:/Users/User/Desktop/NYPD_Shooting_Incident_Data__Historic_.csv")
+head(csv1)
+summary(csv1)
+```
+
+## Number of Murder
+```{r}
+NYPD1<-csv1%>%
+  dplyr::select(OCCUR_DATE,OCCUR_TIME,BORO,STATISTICAL_MURDER_FLAG,VIC_AGE_GROUP,VIC_SEX,VIC_RACE)%>%
+  mutate(OCCUR_DATE=mdy(OCCUR_DATE),OCCUR_TIME=hms(OCCUR_TIME),STATISTICAL_MURDER_FLAG=as.logical(STATISTICAL_MURDER_FLAG),Year=year(OCCUR_DATE))%>%
+filter(STATISTICAL_MURDER_FLAG =="TRUE")
+
+NYPD1%>%
+ggplot(aes(x=BORO,fill=BORO))+geom_bar()+labs(title="NYPD Murder by Borough",x="NYC Borough",y="Number of Murder")
+
+NYPD1%>%
+ggplot(aes(x=Year))+geom_bar()+labs(title="NYPD Murder by Year",x="Years",y="Number of Murder")
+
+NYPD2<-NYPD1%>%group_by(Year)%>%summarize(STATISTICAL_MURDER_FLAG=SUM(STATISTICAL_MURDER_FLAG))%>%dplyr::select(Year,STATISTICAL_MURDER_FLAG)%>%ungroup()
+
+NYPD2
+```
+
+## Murder by Race
+```{r}
+NYPD3<-csv1%>%
+  dplyr::select(OCCUR_DATE,OCCUR_TIME,BORO,STATISTICAL_MURDER_FLAG,VIC_AGE_GROUP,VIC_SEX,VIC_RACE)%>%
+  mutate(OCCUR_DATE=mdy(OCCUR_DATE),OCCUR_TIME=hms(OCCUR_TIME),STATISTICAL_MURDER_FLAG=as.logical(STATISTICAL_MURDER_FLAG),Year=year(OCCUR_DATE))%>%
+group_by(VIC_RACE)%>%
+filter(STATISTICAL_MURDER_FLAG=="TRUE")
+
+NYPD3%>%
+ggplot(aes(x=VIC_RACE,fill=VIC_RACE))+geom_bar()+labs(title="NYPD Murder by Race",x="NYC Race",y="Number of Murder")
+
+NYPD4<-NYPD3%>%group_by(VIC_RACE)%>%summarize(STATISTICAL_MURDER_FLAG=SUM(STATISTICAL_MURDER_FLAG))%>%dplyr::select(VIC_RACE,STATISTICAL_MURDER_FLAG)%>%ungroup()
+
+NYPD4
+```
+
+## Murder by Age
+```{r}
+NYPD5<-csv1%>%
+  dplyr::select(OCCUR_DATE,OCCUR_TIME,BORO,STATISTICAL_MURDER_FLAG,VIC_AGE_GROUP,VIC_SEX,VIC_RACE)%>%
+  mutate(OCCUR_DATE=mdy(OCCUR_DATE),OCCUR_TIME=hms(OCCUR_TIME),STATISTICAL_MURDER_FLAG=as.logical(STATISTICAL_MURDER_FLAG),Year=year(OCCUR_DATE))%>%
+group_by(VIC_AGE_GROUP)%>%
+filter(STATISTICAL_MURDER_FLAG=="TRUE")
+
+NYPD5%>%
+ggplot(aes(x=VIC_AGE_GROUP,fill=VIC_AGE_GROUP))+geom_bar()+labs(title="NYPD Murder by Age",x="NYC Age",y="Number of Murder")
+
+NYPD6<-NYPD3%>%group_by(VIC_AGE_GROUP)%>%summarize(STATISTICAL_MURDER_FLAG=SUM(STATISTICAL_MURDER_FLAG))%>%dplyr::select(VIC_AGE_GROUP,STATISTICAL_MURDER_FLAG)%>%ungroup()
+
+NYPD6
+```
+
+## Murder by Sex
+```{r}
+NYPD7<-csv1%>%
+  dplyr::select(OCCUR_DATE,OCCUR_TIME,BORO,STATISTICAL_MURDER_FLAG,VIC_AGE_GROUP,VIC_SEX,VIC_RACE)%>%
+  mutate(OCCUR_DATE=mdy(OCCUR_DATE),OCCUR_TIME=hms(OCCUR_TIME),STATISTICAL_MURDER_FLAG=as.logical(STATISTICAL_MURDER_FLAG),Year=year(OCCUR_DATE))%>%
+group_by(VIC_SEX)%>%
+filter(STATISTICAL_MURDER_FLAG=="TRUE")
+
+NYPD7%>%
+ggplot(aes(x=VIC_SEX,fill=VIC_SEX))+geom_bar()+labs(title="NYPD Murder by Sex",x="NYC Sex",y="Number of Murder")
+
+NYPD8<-NYPD7%>%group_by(VIC_SEX)%>%summarize(STATISTICAL_MURDER_FLAG=SUM(STATISTICAL_MURDER_FLAG))%>%dplyr::select(VIC_SEX,STATISTICAL_MURDER_FLAG)%>%ungroup()
+
+NYPD8
+```
+
+## Logistic Regression
+```{r}
+NYPD<-csv1%>%
+  dplyr::select(OCCUR_DATE,OCCUR_TIME,BORO,STATISTICAL_MURDER_FLAG,VIC_AGE_GROUP,VIC_SEX,VIC_RACE)%>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE),
+ OCCUR_TIME = hms(OCCUR_TIME),
+ YEAR = year(OCCUR_DATE),VIC_AGE_GROUP = as.factor(VIC_AGE_GROUP),
+ VIC_SEX = as.factor(VIC_SEX),
+ VIC_RACE = as.factor(VIC_RACE),
+ MURDER = ifelse(STATISTICAL_MURDER_FLAG == "TRUE", 1, 0))
+split<-initial_split(NYPD, prop= 0.5)
+train<-training(split)
+test<-testing(split)
+
+md1 <- glm(MURDER~VIC_AGE_GROUP+VIC_RACE+VIC_SEX, data = train, family = 'binomial' )
+summary(md1)
+
+termplot(md1)
+pd1 <- predict(md1, train, type = 'response')
+pre1 <- ifelse(pd1 > 0.5, 1, 0)
+table(Predicted = pre1, Actual = train$MURDER)
+
+confusionMatrix(factor(pre1), factor(train$MURDER), positive = '1')
+r <- multiclass.roc(train$MURDER, pd1, percent = TRUE)
+roc <- r[['rocs']]
+r1 <- roc[[1]]
+plot.roc(r1, col = 'red', lwd = 3)
+plot.roc(r1, 
+         print.auc = T,
+         auc.polygon = T,
+         max.auc.polygon = T,
+         print.thres = T,
+         main = 'ROC Curve for NYPD Murder')
+
+coords(r1, "best", ret="threshold", transpose = FALSE)
+```
+
+## Decision Tree
+```{r}
+tree <- rpart(MURDER ~VIC_AGE_GROUP+VIC_RACE+VIC_SEX, data = train, cp = 0.001)
+rpart.plot(tree)
+printcp(tree)
+plotcp(tree)
+summary(tree)
+print(tree)
+
+pd2 <- predict(tree, train)
+table(pd2,train$MURDER)
+
+pd3 <- predict(tree, test)
+table(pd3,test$MURDER)
+
+r <- multiclass.roc(train$MURDER, pd2, percent = TRUE)
+roc <- r[['rocs']]
+r1 <- roc[[1]]
+plot.roc(r1,
+         print.auc=TRUE, 
+         auc.polygon=TRUE, 
+         grid=c(0.1, 0.2),
+         grid.col=c("green", "red"), 
+         max.auc.polygon=TRUE,
+         auc.polygon.col="lightblue", 
+         print.thres=TRUE, 
+         main= 'ROC Curve Training')
+
+r <- multiclass.roc(test$MURDER, pd3, percent = TRUE)
+roc <- r[['rocs']]
+r1 <- roc[[1]]
+plot.roc(r1,
+         print.auc=TRUE, 
+         auc.polygon=TRUE, 
+         grid=c(0.1, 0.2),
+         grid.col=c("green", "red"), 
+         max.auc.polygon=TRUE,
+         auc.polygon.col="lightblue", 
+         print.thres=TRUE, 
+         main= 'ROC Curve Testing')
+```
+
+## Ensemble Methods
+```{r}
+# Bagging
+set.seed(1234) 
+cvcontrol <- trainControl(method="repeatedcv", 
+                          number = 5,
+                          repeats = 1,
+                          allowParallel=TRUE)
+set.seed(1234)
+bag <- train(MURDER~VIC_AGE_GROUP+VIC_SEX+VIC_RACE,
+             data=train,
+             method="treebag",
+             trControl=cvcontrol,
+             importance=TRUE)
+bag
+
+pd4 <- predict(bag, test, type = 'raw')
+table(pd4,test$MURDER)
+r <- multiclass.roc(test$MURDER, pd4, percent = TRUE)
+roc <- r[['rocs']]
+r1 <- roc[[1]]
+plot.roc(r1,
+         print.auc=TRUE, 
+         auc.polygon=TRUE, 
+         grid=c(0.1, 0.2),
+         grid.col=c("green", "red"), 
+         max.auc.polygon=TRUE,
+         auc.polygon.col="lightblue", 
+         print.thres=TRUE, 
+         main= 'ROC Curve Bag')
+
+# RF
+set.seed(1234)
+forest <- train(MURDER ~VIC_AGE_GROUP+VIC_SEX+VIC_RACE , 
+                data=train,
+                method="rf",
+                trControl=cvcontrol,
+                importance=TRUE)
+forest
+
+pd5 <- predict(forest, test, type = 'raw')
+table(pd5, test$MURDER)
+r <- multiclass.roc(test$MURDER, pd5, percent = TRUE)
+roc <- r[['rocs']]
+r1 <- roc[[1]]
+plot.roc(r1,
+         print.auc=TRUE, 
+         auc.polygon=TRUE, 
+         grid=c(0.1, 0.2),
+         grid.col=c("green", "red"), 
+         max.auc.polygon=TRUE,
+         auc.polygon.col="lightblue", 
+         print.thres=TRUE, 
+         main= 'ROC Curve Forest')
+# Boosting
+set.seed(1234)
+boo <- train(MURDER~VIC_AGE_GROUP+VIC_SEX+VIC_RACE,
+             data=train,
+             method="xgbTree",   
+             trControl=cvcontrol,
+             tuneGrid = expand.grid(nrounds = 500,
+                                    max_depth = 4,
+                                    eta = 0.28,
+                                    gamma = 1.8,
+                                    colsample_bytree = 1,
+                                    min_child_weight = 1,
+                                    subsample = 1))
+
+boo
+
+pd6 <- predict(boo, test, type = 'raw')
+table(pd6, test$MURDER)
+r <- multiclass.roc(test$MURDER, pd6, percent = TRUE)
+roc <- r[['rocs']]
+r1 <- roc[[1]]
+plot.roc(r1,
+         print.auc=TRUE, 
+         auc.polygon=TRUE, 
+         grid=c(0.1, 0.2),
+         grid.col=c("green", "red"), 
+         max.auc.polygon=TRUE,
+         auc.polygon.col="lightblue", 
+         print.thres=TRUE, 
+         main= 'ROC Curve Boo')
+```
